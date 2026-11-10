@@ -309,10 +309,16 @@ describe('createSwapExecuteXcm', () => {
       )
     })
 
-    it('does not set separate fee asset when main asset IS DOT', async () => {
-      vi.mocked(isAssetEqual).mockReturnValue(true)
+    it('does not set separate fee asset on origin but forwards DOT feeAssetInfo to AssetHub when main asset IS DOT', async () => {
+      const dotFrom = { ...wethFrom, symbol: 'DOT' }
+      vi.mocked(isAssetEqual).mockImplementation((a, b) => a.symbol === b.symbol)
 
-      await createSwapExecuteXcm(baseEthOptions)
+      await createSwapExecuteXcm({
+        ...baseEthOptions,
+        chain: undefined,
+        exchangeChain: 'Hydration',
+        assetInfoFrom: dotFrom
+      })
 
       const commonCall = vi.mocked(prepareCommonExecuteXcm).mock.calls[0][0]
       expect(commonCall.feeAssetInfo).toBeUndefined()
@@ -323,8 +329,9 @@ describe('createSwapExecuteXcm', () => {
         expect.objectContaining({
           chain: 'Hydration',
           destChain: 'AssetHubPolkadot',
-          feeAssetInfo: undefined,
-          fees: { originFee: 0n, reserveFee: 10n, destFee: 700n }
+          assetInfo: wethTo,
+          feeAssetInfo: expect.objectContaining({ symbol: 'DOT' }),
+          fees: { originFee: 0n, reserveFee: 700n, destFee: 700n }
         })
       )
     })

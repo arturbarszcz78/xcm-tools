@@ -160,14 +160,14 @@ export const createSwapExecuteXcm = async <
     const [bridgeFee, executionFee] = await getParaEthTransferFees(ahApi)
     ethBridgeFee = bridgeFee + executionFee
 
-    if (!isAssetEqual(assetInfoFrom, nativeFeeAssetInfo)) {
+    if (!isAssetEqual(assetInfoTo, nativeFeeAssetInfo)) {
       ethFeeAssetInfo = nativeFeeAssetInfo
     }
   }
 
   // Ethereum fee asset takes precedence over user-provided feeAssetInfo
   const resolvedFeeAssetInfo = isEthereumDest
-    ? ethFeeAssetInfo
+    ? getFeeAssetInfo(assetInfoFrom, ethFeeAssetInfo)
     : getFeeAssetInfo(assetInfoFrom, feeAssetInfo)
 
   const hasSeparateFeeAsset = resolvedFeeAssetInfo !== undefined

@@ -37,8 +37,17 @@ const validateAmount = (amount: bigint, requiredFee: bigint): void => {
   }
 }
 
-const calculateTotalFees = (chain: TSubstrateChain | undefined, fees: TSwapFeeEstimates): bigint =>
-  chain ? fees.originReserveFee + fees.exchangeFee : 0n
+const calculateTotalFees = (
+  chain: TSubstrateChain | undefined,
+  fees: TSwapFeeEstimates,
+  isEthereumDest: boolean = false,
+  hasSeparateFeeAsset: boolean = false
+): bigint => {
+  const originAndExchange = chain ? fees.originReserveFee + fees.exchangeFee : 0n
+  const destBridgeFees =
+    isEthereumDest && !hasSeparateFeeAsset ? fees.destReserveFee + fees.destFee : 0n
+  return originAndExchange + destBridgeFees
+}
 
 const executeDryRun = async <TApi, TRes, TSigner, TCustomChain extends string = never>(
   params: TDryRunOptions<TApi, TRes, TSigner, TCustomChain>
@@ -187,7 +196,20 @@ const extractFeesFromDryRun = <TCustomChain extends string = never>(
     }
   }
 
-  if (destChain && dryRunResult.destination?.success) {
+  if (destChain && isExternalChain(destChain)) {
+    const bridgeHop = hops[hops.length - 1]
+    if (bridgeHop) {
+      if (requireHopsSuccess && !bridgeHop.result.success) {
+        throw new DryRunFailedError(
+          { ...bridgeHop.result.dryRunError, chainKind: 'hop', chain: bridgeHop.chain },
+          'Bridge hop:'
+        )
+      }
+      if (bridgeHop.result.success) {
+        fees.destFee = padValueBy(bridgeHop.result.fee, FEE_PADDING_PERCENTAGE)
+      }
+    }
+  } else if (destChain && dryRunResult.destination?.success) {
     fees.destFee = padValueBy(dryRunResult.destination.fee, FEE_PADDING_PERCENTAGE)
   }
 
@@ -300,7 +322,7 @@ export const handleSwapExecuteTransfer = async <
     destFee: dummyDestFee
   }
 
-  const totalFeesPre = calculateTotalFees(chain, fees)
+  const totalFeesPre = calculateTotalFees(chain, fees, isEthereumDest, hasSeparateFeeAsset)
 
   if (!hasSeparateFeeAsset) {
     validateAmount(assetFrom.amount, totalFeesPre)
@@ -351,7 +373,7 @@ export const handleSwapExecuteTransfer = async <
     // We set the exchange fee to non-zero value to prevent creating dummy tx
     extractedFees.exchangeFee = MIN_FEE
   }
-  const totalFees = calculateTotalFees(chain, extractedFees)
+  const totalFees = calculateTotalFees(chain, extractedFees, isEthereumDest, hasSeparateFeeAsset)
 
   if (!hasSeparateFeeAsset) {
     validateAmount(assetFrom.amount, totalFees)
@@ -359,7 +381,7 @@ export const handleSwapExecuteTransfer = async <
 
   let updatedAssetTo = assetTo
 
-  if (chain) {
+  if (chain || (isEthereumDest && !hasSeparateFeeAsset)) {
     // When fees are paid from a separate asset (e.g. DOT for Ethereum),
     // the full main asset amount is available for the swap
     const amountAvailableForSwap = hasSeparateFeeAsset

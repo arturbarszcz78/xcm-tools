@@ -18,7 +18,8 @@ vi.mock('../../fees/padFee', () => ({
 }))
 
 vi.mock('../../chain', () => ({
-  getChainVersion: () => 2
+  getChainVersion: () => 2,
+  getRelayChainOf: () => 'Polkadot'
 }))
 
 vi.mock('./createExecuteCall', () => ({
@@ -374,6 +375,72 @@ describe('handleSwapExecuteTransfer', () => {
       })
       expect(finalCall[0].fees.originFee).toBe(0n)
       expect(options.calculateMinAmountOut).toHaveBeenCalledWith(1680n)
+    })
+  })
+
+  describe('Ethereum destination', () => {
+    it('extracts BridgeHub fee and deducts post-swap DOT bridge fees from amountAvailableForSwap when swapping native DOT to Ethereum', async () => {
+      vi.mocked(isAssetEqual).mockReturnValue(true)
+
+      const dryRunEthResult: TDryRunResult = {
+        origin: { success: true, fee: 100n },
+        hops: [
+          {
+            chain: 'AssetHubPolkadot',
+            result: { success: true, fee: 100n }
+          },
+          {
+            chain: 'BridgeHubPolkadot',
+            result: { success: true, fee: 200n }
+          }
+        ]
+      } as unknown as TDryRunResult
+
+      vi.spyOn(dryRunModule, 'dryRunInternal').mockResolvedValue(dryRunEthResult)
+
+      const calculateMinAmountOut = vi.fn().mockResolvedValue(1234n)
+      const options: TCreateSwapXcmOptions<unknown, unknown, unknown> = {
+        ...baseOptions,
+        chain: undefined,
+        exchangeChain: 'Hydration',
+        destChain: 'Ethereum',
+        assetInfoFrom: {
+          amount: 5000n,
+          location: { parents: 1, interior: 'Here' },
+          symbol: 'DOT',
+          decimals: 10,
+          existentialDeposit: '1000'
+        },
+        calculateMinAmountOut
+      }
+
+      await handleSwapExecuteTransfer(options)
+
+      expect(calculateMinAmountOut).toHaveBeenCalledWith(4680n)
+
+      const [, finalCall] = vi.mocked(createSwapExecuteXcm).mock.calls
+      expect(finalCall[0].fees.destReserveFee).toBe(110n)
+      expect(finalCall[0].fees.destFee).toBe(210n)
+    })
+
+    it('throws AmountTooLowError when initial DOT amount is insufficient to cover bridge fees', async () => {
+      vi.mocked(isAssetEqual).mockReturnValue(true)
+
+      const options: TCreateSwapXcmOptions<unknown, unknown, unknown> = {
+        ...baseOptions,
+        chain: undefined,
+        exchangeChain: 'Hydration',
+        destChain: 'Ethereum',
+        assetInfoFrom: {
+          amount: 1500n,
+          location: { parents: 1, interior: 'Here' },
+          symbol: 'DOT',
+          decimals: 10,
+          existentialDeposit: '1000'
+        }
+      }
+
+      await expect(handleSwapExecuteTransfer(options)).rejects.toThrow(AmountTooLowError)
     })
   })
 })
