@@ -116,6 +116,10 @@ export const validateEthereumAsset = <TApi, TRes, TSigner, TCustomChain extends 
     RELAY_LOCATION,
     {
       parents: 2,
+      interior: { X1: [{ GlobalConsensus: { kusama: null } }] }
+    },
+    {
+      parents: 2,
       interior: { X1: [{ GlobalConsensus: { Kusama: null } }] }
     }
   ]

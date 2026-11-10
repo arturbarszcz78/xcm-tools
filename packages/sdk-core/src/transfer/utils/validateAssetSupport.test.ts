@@ -443,6 +443,20 @@ describe('validateEthereumAsset', () => {
     ).not.toThrow()
   })
 
+  it('should not throw for asset with lowercase kusama GlobalConsensus location', () => {
+    const asset = {
+      symbol: 'KSM',
+      location: {
+        parents: 2,
+        interior: { X1: [{ GlobalConsensus: { kusama: null } }] }
+      }
+    } as TAssetInfo
+
+    expect(() =>
+      validateEthereumAsset(mockApi, 'AssetHubPolkadot', 'Ethereum', asset)
+    ).not.toThrow()
+  })
+
   it('should not throw for asset with Kusama GlobalConsensus location', () => {
     const asset = {
       symbol: 'KSM',
