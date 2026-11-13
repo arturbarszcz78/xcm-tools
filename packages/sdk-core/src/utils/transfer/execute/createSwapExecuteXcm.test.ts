@@ -329,6 +329,40 @@ describe('createSwapExecuteXcm', () => {
       )
     })
 
+    it('does not set separate fee asset at origin when swapping DOT into Snowbridge asset, but forwards DOT feeAssetInfo to AssetHub', async () => {
+      const dotFrom = {
+        symbol: 'DOT',
+        decimals: 10,
+        existentialDeposit: '1000',
+        amount: 2000n,
+        location: LOCATION
+      }
+      vi.mocked(isAssetEqual).mockImplementation((a, b) => a.symbol === b.symbol)
+
+      await createSwapExecuteXcm({
+        ...baseEthOptions,
+        chain: undefined,
+        exchangeChain: 'Hydration',
+        assetInfoFrom: dotFrom,
+        assetInfoTo: wethTo
+      })
+
+      const commonCall = vi.mocked(prepareCommonExecuteXcm).mock.calls[0][0]
+      expect(commonCall.feeAssetInfo).toBeUndefined()
+      expect(commonCall.useJitWithdraw).toBe(true)
+      expect(commonCall.fees).toEqual({ originFee: 0n, reserveFee: 0n, destFee: 0n })
+
+      expect(createBaseExecuteXcm).toHaveBeenCalledWith(
+        expect.objectContaining({
+          chain: 'Hydration',
+          destChain: 'AssetHubPolkadot',
+          assetInfo: wethTo,
+          feeAssetInfo: expect.objectContaining({ symbol: 'DOT' }),
+          fees: { originFee: 0n, reserveFee: 700n, destFee: 700n }
+        })
+      )
+    })
+
     it('generates snowbridge instructions for Ethereum dest', async () => {
       await createSwapExecuteXcm(baseEthOptions)
 
